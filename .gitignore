@@ -1,0 +1,35 @@
+GNU ARM v12.2.1 - Default
+
+# Ignore build files
+/build/
+/out/
+/Debug/
+/Release/
+
+# Ignore Simplicity Studio configuration files
+.SimplicityStudio/
+
+# Ignore metadata and settings files
+*.metadata/
+*.settings/
+
+# Ignore generated files
+*.launch
+*.cproject
+*.project
+
+# Ignore backups and temporary files
+*.bak
+*.tmp
+*.swp
+*.swo
+
+# Ignore object and binary files
+*.o
+*.bin
+*.elf
+*.hex
+*.map
+
+# Ignore logs
+*.log
