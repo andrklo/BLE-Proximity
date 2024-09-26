@@ -27,11 +27,11 @@ typedef enum {
 } ble_proximity_cmd_t;
 
 typedef enum {
-  BLE_PROXIMITY_MODULE_STATUS_UNKNOWN = 0x00,               // Статус радиомодуля не известен
-  BLE_PROXIMITY_MODULE_STATUS_NOT_INIT = 0x01,              // Радиомодуль не инициализирован
-  BLE_PROXIMITY_MODULE_STATUS_ADVERT = 0x02,                // Радиомодуль в режиме поиска
-  BLE_PROXIMITY_MODULE_STATUS_CONNECTED = 0x03,             // Радиомодуль подключен
-  BLE_PROXIMITY_MODULE_STATUS_LOST = 0xFF                   // Ошибка в работе радиомодуля
+  BLE_PROXIMITY_MODULE_STATUS_UNKNOWN = 0x00,  // Статус радиомодуля не известен
+  BLE_PROXIMITY_MODULE_STATUS_NOT_INIT = 0x01, // Радиомодуль не инициализирован
+  BLE_PROXIMITY_MODULE_STATUS_ADVERT = 0x02,      // Радиомодуль в режиме поиска
+  BLE_PROXIMITY_MODULE_STATUS_CONNECTED = 0x03,         // Радиомодуль подключен
+  BLE_PROXIMITY_MODULE_STATUS_LOST = 0xFF         // Ошибка в работе радиомодуля
 } ble_proximity_module_status_t;
 
 typedef struct {
@@ -125,16 +125,24 @@ void ble_proximity_send_state(void);
 void ble_proximity_send_uss_distance(float distance);
 void ble_proximity_send_ir_state(bool active);
 
-void ble_proximity_uart_write_data(ble_proximity_cmd_t cmd, uint8_t *data, uint8_t data_len);
-bool ble_proximity_uart_read_finish(unsigned int channel, unsigned int sequenceNo, void *userParam);
-bool ble_proximity_uart_write_finish(unsigned int channel, unsigned int sequenceNo, void *userParam);
+void ble_proximity_uart_write_data(ble_proximity_cmd_t cmd,
+                                   uint8_t *data,
+                                   uint8_t data_len);
+bool ble_proximity_uart_read_finish(unsigned int channel,
+                                    unsigned int sequenceNo,
+                                    void *userParam);
+bool ble_proximity_uart_write_finish(unsigned int channel,
+                                     unsigned int sequenceNo,
+                                     void *userParam);
 
 void ble_proximity_handle_uart_pack(ble_proximity_uart_pack_t *uart_pack);
 
 bool ble_proximity_chk_queue_empty(ble_proximity_uart_queue_t *queue);
 bool ble_proximity_chk_queue_full(ble_proximity_uart_queue_t *queue);
-bool ble_proximity_add_in_queue(ble_proximity_uart_queue_t *queue, ble_proximity_uart_pack_t item);
-bool ble_proximity_del_from_queue(ble_proximity_uart_queue_t *queue, ble_proximity_uart_pack_t *item);
+bool ble_proximity_add_in_queue(ble_proximity_uart_queue_t *queue,
+                                ble_proximity_uart_pack_t item);
+bool ble_proximity_del_from_queue(ble_proximity_uart_queue_t *queue,
+                                  ble_proximity_uart_pack_t *item);
 void ble_proximity_chk_queue(ble_proximity_uart_queue_t *queue);
 
 void ble_proximity_rx_queue_handler(void);
