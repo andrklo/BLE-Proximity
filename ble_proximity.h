@@ -78,6 +78,9 @@ typedef struct
   bool enable;
   bool flag;
   float distance;
+  float distance_trig;
+  uint16_t period;
+  uint16_t timer_cnt;
   bool start_req;
   bool echo_flag;
   uint32_t start_time;
@@ -97,15 +100,18 @@ typedef struct
   ble_proximity_uart_handle_t uart;
   ble_proximity_uss_handle_t uss;
   ble_proximity_ir_handle_t ir;
+  uint16_t timer_period;
   bool timer_tick;
 } ble_proximity_handle_t;
 
 void ble_proximity_init(ble_proximity_handle_t *handle,
+                        uint16_t timer_period,
                         bool uart_enable,
                         bool uss_enable,
                         bool ir_enable);
 void ble_proximity_handler(void);
 
+void ble_proximity_set_timer_period(uint16_t period);
 void ble_proximity_set_timer_tick(void);
 
 void ble_proximity_set_state(ble_proximity_module_state_t state);
@@ -132,8 +138,6 @@ void ble_proximity_set_uss_start_time(uint32_t time);
 void ble_proximity_set_uss_end_time(uint32_t time);
 float ble_proximity_get_uss_distance(void);
 
-void ble_proximity_uss_distance_calc(void);
-
 bool ble_proximity_get_uart_enable(void);
 void ble_proximity_set_uart_enable(bool enable);
 void ble_proximity_uart_set_state(bool dest,
@@ -147,30 +151,11 @@ void ble_proximity_send_state(void);
 void ble_proximity_send_uss_distance(float distance);
 void ble_proximity_send_ir_state(bool active);
 
-void ble_proximity_uart_write_data(ble_proximity_cmd_t cmd,
-                                   uint8_t *data,
-                                   uint8_t data_len);
 bool ble_proximity_uart_read_finish(unsigned int channel,
                                     unsigned int sequenceNo,
                                     void *userParam);
 bool ble_proximity_uart_write_finish(unsigned int channel,
                                      unsigned int sequenceNo,
                                      void *userParam);
-
-void ble_proximity_handle_uart_pack(ble_proximity_uart_pack_t *uart_pack);
-
-bool ble_proximity_chk_queue_empty(ble_proximity_uart_queue_t *queue);
-bool ble_proximity_chk_queue_full(ble_proximity_uart_queue_t *queue);
-bool ble_proximity_add_in_queue(ble_proximity_uart_queue_t *queue,
-                                ble_proximity_uart_pack_t item);
-bool ble_proximity_del_from_queue(ble_proximity_uart_queue_t *queue,
-                                  ble_proximity_uart_pack_t *item);
-void ble_proximity_chk_queue(ble_proximity_uart_queue_t *queue);
-
-void ble_proximity_rx_queue_handler(void);
-void ble_proximity_tx_queue_handler(void);
-
-uint8_t ble_proximity_calc_crc(uint8_t *data,
-                               uint8_t data_len);
 
 #endif /* BLE_PROXIMITY_H_ */

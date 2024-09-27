@@ -2,7 +2,31 @@
 
 static ble_proximity_handle_t *ble_proximity_handle;
 
+static void ble_proximity_rx_queue_handler();
+static void ble_proximity_tx_queue_handler();
+static void ble_proximity_uart_write_data(ble_proximity_cmd_t cmd,
+                                          uint8_t *data,
+                                          uint8_t data_len);
+static void ble_proximity_handle_uart_pack(ble_proximity_uart_pack_t *uart_pack);
+static bool ble_proximity_chk_queue_empty(ble_proximity_uart_queue_t *queue);
+static bool ble_proximity_chk_queue_full(ble_proximity_uart_queue_t *queue);
+static bool ble_proximity_add_in_queue(ble_proximity_uart_queue_t *queue,
+                                       ble_proximity_uart_pack_t item);
+static bool ble_proximity_del_from_queue(ble_proximity_uart_queue_t *queue,
+                                         ble_proximity_uart_pack_t *item);
+static void ble_proximity_chk_queue(ble_proximity_uart_queue_t *queue);
+
+static void ble_proximity_uss_distance_calc(void);
+static void ble_proximity_uart_write_data(ble_proximity_cmd_t cmd,
+                                   uint8_t *data,
+                                   uint8_t data_len);
+static uint8_t ble_proximity_calc_crc(uint8_t *data,
+                                      uint8_t data_len);
+
+//////////////////////////////////////////////////////////////////////////////////
+
 void ble_proximity_init(ble_proximity_handle_t *handle,
+                        uint16_t timer_period,
                         bool uart_enable,
                         bool uss_enable,
                         bool ir_enable)
@@ -14,12 +38,15 @@ void ble_proximity_init(ble_proximity_handle_t *handle,
   ble_proximity_handle = handle;
   ble_proximity_handle->module.state = BLE_PROXIMITY_MODULE_STATE_NOT_INIT;
   ble_proximity_handle->module.connected = false;
-
+  ble_proximity_handle->timer_period = timer_period;
   ble_proximity_handle->timer_tick = false;
 
   ble_proximity_handle->uss.enable = uss_enable;
   ble_proximity_handle->uss.flag = false;
   ble_proximity_handle->uss.distance = 0;
+  ble_proximity_handle->uss.distance_trig = 0;
+  ble_proximity_handle->uss.period = timer_period;
+  ble_proximity_handle->uss.timer_cnt = 0;
   ble_proximity_handle->uss.start_req = false;
   ble_proximity_handle->uss.echo_flag = false;
   ble_proximity_handle->uss.start_time = 0;
@@ -38,7 +65,7 @@ void ble_proximity_init(ble_proximity_handle_t *handle,
   ble_proximity_handle->uart.tx_queue.size = 0;
   ble_proximity_handle->uart.rx_current_pack = 0;
   ble_proximity_handle->uart.tx_current_pack = 0;
-  for (int i = 0; i < BLE_PROXIMITY_UART_PACK_SIZE; i++) {
+  for(int i = 0; i < BLE_PROXIMITY_UART_PACK_SIZE; i++) {
     ble_proximity_handle->uart.rx_buff[i] = 0;
     ble_proximity_handle->uart.tx_buff[i] = 0;
   }
@@ -50,11 +77,17 @@ void ble_proximity_init(ble_proximity_handle_t *handle,
 
 void ble_proximity_handler()
 {
+  if (ble_proximity_handle == NULL) {
+    return;
+  }
   if (ble_proximity_handle->timer_tick) {
     ble_proximity_handle->timer_tick = false;
     if (ble_proximity_handle->module.state > BLE_PROXIMITY_MODULE_STATE_NOT_INIT) {
       if (ble_proximity_handle->uss.enable) {
-        ble_proximity_handle->uss.start_req = true;
+        ble_proximity_handle->uss.timer_cnt += ble_proximity_handle->timer_period;
+        if (ble_proximity_handle->uss.timer_cnt >= ble_proximity_handle->uss.period) {
+          ble_proximity_handle->uss.start_req = true;
+        }
       }
     } else {
       ble_proximity_handle->module.state = BLE_PROXIMITY_MODULE_STATE_ADVERT;
@@ -69,116 +102,171 @@ void ble_proximity_handler()
   }
 }
 
+void ble_proximity_set_timer_period(uint16_t period)
+{
+  if (ble_proximity_handle != NULL) {
+    ble_proximity_handle->timer_period = period;
+  }
+}
+
 void ble_proximity_set_timer_tick(void)
 {
-  ble_proximity_handle->timer_tick = true;
+  if (ble_proximity_handle != NULL) {
+    ble_proximity_handle->timer_tick = true;
+  }
 }
 
 void ble_proximity_set_state(ble_proximity_module_state_t state)
 {
-  ble_proximity_handle->module.state = state;
+  if (ble_proximity_handle != NULL) {
+    ble_proximity_handle->module.state = state;
+  }
 }
 
 ble_proximity_module_state_t ble_proximity_get_state(void)
 {
-  return ble_proximity_handle->module.state;
+  if (ble_proximity_handle != NULL) {
+    return ble_proximity_handle->module.state;
+  }
+  return false;
 }
 
 void ble_proximity_set_connected(bool state)
 {
-  ble_proximity_handle->module.connected = state;
-  state ?
-      (ble_proximity_handle->module.state = BLE_PROXIMITY_MODULE_STATE_CONNECTED) :
-      (ble_proximity_handle->module.state = BLE_PROXIMITY_MODULE_STATE_ADVERT);
+  if (ble_proximity_handle != NULL) {
+    ble_proximity_handle->module.connected = state;
+    state ?
+        (ble_proximity_handle->module.state = BLE_PROXIMITY_MODULE_STATE_CONNECTED) :
+        (ble_proximity_handle->module.state = BLE_PROXIMITY_MODULE_STATE_ADVERT);
+  }
 }
 
 bool ble_proximity_get_connected(void)
 {
-  return ble_proximity_handle->module.connected;
+  if (ble_proximity_handle != NULL) {
+    return ble_proximity_handle->module.connected;
+  }
+  return false;
 }
 
 bool ble_proximity_get_ir_enable(void)
 {
-  return ble_proximity_handle->ir.enable;
+  if (ble_proximity_handle != NULL) {
+    return ble_proximity_handle->ir.enable;
+  }
+  return false;
 }
 
 void ble_proximity_set_ir_enable(bool enable)
 {
-  ble_proximity_handle->ir.enable = enable;
+  if (ble_proximity_handle != NULL) {
+    ble_proximity_handle->ir.enable = enable;
+  }
 }
 
 bool ble_proximity_get_ir_flag(void)
 {
-  return ble_proximity_handle->ir.flag;
+  if (ble_proximity_handle != NULL) {
+    return ble_proximity_handle->ir.flag;
+  }
+  return false;
 }
 
 void ble_proximity_set_ir_flag(bool flag)
 {
-  ble_proximity_handle->ir.flag = flag;
+  if (ble_proximity_handle != NULL) {
+    ble_proximity_handle->ir.flag = flag;
+  }
 }
 
 bool ble_proximity_get_ir_state(void)
 {
-  return ble_proximity_handle->ir.state;
+  if (ble_proximity_handle != NULL) {
+    return ble_proximity_handle->ir.state;
+  }
+  return false;
 }
 
 void ble_proximity_set_ir_state(bool state)
 {
-  ble_proximity_handle->ir.state = state;
+  if (ble_proximity_handle != NULL) {
+    ble_proximity_handle->ir.state = state;
+  }
 }
 
 bool ble_proximity_get_uss_enable(void)
 {
-  return ble_proximity_handle->uss.enable;
+  if (ble_proximity_handle != NULL) {
+    return ble_proximity_handle->uss.enable;
+  }
+  return false;
 }
 
 void ble_proximity_set_uss_enable(bool enable)
 {
-  ble_proximity_handle->uss.enable = enable;
+  if (ble_proximity_handle != NULL) {
+    ble_proximity_handle->uss.enable = enable;
+  }
 }
 
 bool ble_proximity_get_uss_start_req(void)
 {
-  return ble_proximity_handle->uss.start_req;
+  if (ble_proximity_handle != NULL) {
+    return ble_proximity_handle->uss.start_req;
+  }
+  return false;
 }
 
 void ble_proximity_set_uss_start_req(bool flag)
 {
-  ble_proximity_handle->uss.start_req = flag;
-}
-
-bool ble_proximity_get_uss_flag(void)
-{
-  return ble_proximity_handle->uss.flag;
-}
-
-void ble_proximity_set_uss_flag(bool flag)
-{
-  ble_proximity_handle->uss.flag = flag;
-}
-
-bool ble_proximity_get_uss_echo_flag(void)
-{
-  return ble_proximity_handle->uss.echo_flag;
-}
-
-void ble_proximity_set_uss_echo_flag(bool flag)
-{
-  ble_proximity_handle->uss.echo_flag = flag;
-}
-
-void ble_proximity_set_uss_start_time(uint32_t time)
-{
-  if (ble_proximity_handle->uss.enable) {
-    ble_proximity_handle->uss.start_time = time;
-    ble_proximity_handle->uss.echo_flag = true;
+  if (ble_proximity_handle != NULL) {
+    ble_proximity_handle->uss.start_req = flag;
   }
 
 }
 
+bool ble_proximity_get_uss_flag(void)
+{
+  if (ble_proximity_handle != NULL) {
+    return ble_proximity_handle->uss.flag;
+  }
+  return false;
+}
+
+void ble_proximity_set_uss_flag(bool flag)
+{
+  if (ble_proximity_handle != NULL) {
+    ble_proximity_handle->uss.flag = flag;
+  }
+
+}
+
+bool ble_proximity_get_uss_echo_flag(void)
+{
+  if (ble_proximity_handle != NULL) {
+    return ble_proximity_handle->uss.echo_flag;
+  }
+  return false;
+}
+
+void ble_proximity_set_uss_echo_flag(bool flag)
+{
+  if (ble_proximity_handle != NULL) {
+    ble_proximity_handle->uss.echo_flag = flag;
+  }
+}
+
+void ble_proximity_set_uss_start_time(uint32_t time)
+{
+  if (ble_proximity_handle != NULL && ble_proximity_handle->uss.enable) {
+    ble_proximity_handle->uss.start_time = time;
+    ble_proximity_handle->uss.echo_flag = true;
+  }
+}
+
 void ble_proximity_set_uss_end_time(uint32_t time)
 {
-  if (ble_proximity_handle->uss.enable) {
+  if (ble_proximity_handle != NULL && ble_proximity_handle->uss.enable) {
     ble_proximity_handle->uss.end_time = time;
     ble_proximity_handle->uss.flag = true;
     ble_proximity_handle->uss.echo_flag = false;
@@ -187,10 +275,13 @@ void ble_proximity_set_uss_end_time(uint32_t time)
 
 float ble_proximity_get_uss_distance(void)
 {
-  return ble_proximity_handle->uss.distance;
+  if (ble_proximity_handle != NULL) {
+    return ble_proximity_handle->uss.distance;
+  }
+  return 0;
 }
 
-void ble_proximity_uss_distance_calc(void)
+static void ble_proximity_uss_distance_calc(void)
 {
   if (ble_proximity_handle->uss.enable) {
     // Вычисляем количество тиков
@@ -206,41 +297,60 @@ void ble_proximity_uss_distance_calc(void)
 
 bool ble_proximity_get_uart_enable(void)
 {
-  return ble_proximity_handle->uart.enable;
+  if (ble_proximity_handle != NULL) {
+    return ble_proximity_handle->uart.enable;
+  }
+  return false;
 }
 void ble_proximity_set_uart_enable(bool enable)
 {
-  ble_proximity_handle->uart.enable = enable;
+  if (ble_proximity_handle != NULL) {
+    ble_proximity_handle->uart.enable = enable;
+  }
 }
 
 // dest: false - rx, true - tx
 void ble_proximity_uart_set_state(bool dest,
                                   bool state)
 {
-  dest ? (ble_proximity_handle->uart.tx_active = state) : (ble_proximity_handle->uart.rx_active = state);
+  if (ble_proximity_handle != NULL) {
+    dest ? (ble_proximity_handle->uart.tx_active = state) : (ble_proximity_handle->uart.rx_active = state);
+  }
 }
 
 // dest: false - rx, true - tx
 bool ble_proximity_uart_get_state(bool dest)
 {
-  return dest ? ble_proximity_handle->uart.tx_active : ble_proximity_handle->uart.rx_active;
+  if (ble_proximity_handle != NULL) {
+    return dest ? ble_proximity_handle->uart.tx_active : ble_proximity_handle->uart.rx_active;
+  }
+  return false;
 }
 
 // dest: false - rx, true - tx
 void ble_proximity_uart_set_req(bool dest,
                                 bool state)
 {
-  dest ? (ble_proximity_handle->uart.tx_req = state) : (ble_proximity_handle->uart.rx_req = state);
+  if (ble_proximity_handle != NULL) {
+    dest ? (ble_proximity_handle->uart.tx_req = state) : (ble_proximity_handle->uart.rx_req = state);
+  }
 }
 
 // dest: false - rx, true - tx
 bool ble_proximity_uart_get_req(bool dest)
 {
-  return dest ? ble_proximity_handle->uart.tx_req : ble_proximity_handle->uart.rx_req;
+  if (ble_proximity_handle != NULL) {
+    return dest ? ble_proximity_handle->uart.tx_req : ble_proximity_handle->uart.rx_req;
+  }
+  return false;
 }
 
 void ble_proximity_send_state(void)
 {
+  if (ble_proximity_handle == NULL) {
+    return;
+  }
+
   uint8_t data[1] = {ble_proximity_handle->module.state};
 
   ble_proximity_uart_write_data(BLE_PROXIMITY_CMD_MODULE_STATE,
@@ -250,6 +360,10 @@ void ble_proximity_send_state(void)
 
 void ble_proximity_send_uss_distance(float distance)
 {
+  if (ble_proximity_handle == NULL) {
+    return;
+  }
+
   int int_part = (int) distance;  // Целая часть
   int frac_part = (int) ((distance - int_part) * pow(10,
                                                      2));  // Дробная часть
@@ -265,6 +379,10 @@ void ble_proximity_send_uss_distance(float distance)
 
 void ble_proximity_send_ir_state(bool active)
 {
+  if (ble_proximity_handle == NULL) {
+    return;
+  }
+
   uint8_t data[1];
   data[0] = active;
 
@@ -273,9 +391,9 @@ void ble_proximity_send_ir_state(bool active)
                                 sizeof(data));
 }
 
-void ble_proximity_uart_write_data(ble_proximity_cmd_t cmd,
-                                   uint8_t *data,
-                                   uint8_t data_len)
+static void ble_proximity_uart_write_data(ble_proximity_cmd_t cmd,
+                                          uint8_t *data,
+                                          uint8_t data_len)
 {
   if (!ble_proximity_chk_queue_full(&ble_proximity_handle->uart.tx_queue)) {
     ble_proximity_uart_pack_t tx_packet;
@@ -302,6 +420,10 @@ bool ble_proximity_uart_read_finish(unsigned int channel,
   (void) channel;
   (void) sequenceNo;
   (void) userParam;
+
+  if (ble_proximity_handle == NULL) {
+    return false;
+  }
 
   if (ble_proximity_handle->uart.rx_buff[BLE_PROXIMITY_UART_PACK_POS_PREAMBLE] == BLE_PROXIMITY_UART_PREAMBLE) {
     if (ble_proximity_handle->uart.rx_buff[BLE_PROXIMITY_UART_PACK_POS_CRC]
@@ -333,15 +455,21 @@ bool ble_proximity_uart_write_finish(unsigned int channel,
   (void) sequenceNo;
   (void) userParam;
 
-  //ble_proximity_del_from_queue(&ble_proximity_handle->uart.tx_queue, &ble_proximity_handle->uart.tx_queue.pack[ble_proximity_handle->uart.tx_current_pack]);
+  if (ble_proximity_handle == NULL) {
+    return false;
+  }
 
+  /*
+  ble_proximity_del_from_queue(&ble_proximity_handle->uart.tx_queue,
+                               &ble_proximity_handle->uart.tx_queue.pack[ble_proximity_handle->uart.tx_current_pack]);
+  */
   ble_proximity_handle->uart.tx_queue.pack[ble_proximity_handle->uart.tx_current_pack].status =
   false;
   ble_proximity_handle->uart.tx_active = false;
   return true;
 }
 
-void ble_proximity_handle_uart_pack(ble_proximity_uart_pack_t *uart_pack)
+static void ble_proximity_handle_uart_pack(ble_proximity_uart_pack_t *uart_pack)
 {
   switch (uart_pack->cmd) {
     default:
@@ -349,7 +477,7 @@ void ble_proximity_handle_uart_pack(ble_proximity_uart_pack_t *uart_pack)
   }
 }
 
-void ble_proximity_rx_queue_handler()
+static void ble_proximity_rx_queue_handler()
 {
   if (ble_proximity_chk_queue_empty(&ble_proximity_handle->uart.rx_queue)) {
     return;  // Очередь пуста, нечего обходить
@@ -366,7 +494,7 @@ void ble_proximity_rx_queue_handler()
   }
 }
 
-void ble_proximity_tx_queue_handler()
+static void ble_proximity_tx_queue_handler()
 {
   if (ble_proximity_chk_queue_empty(&ble_proximity_handle->uart.tx_queue)) {
     return;  // Очередь пуста, нечего обходить
@@ -396,18 +524,18 @@ void ble_proximity_tx_queue_handler()
   }
 }
 
-bool ble_proximity_chk_queue_empty(ble_proximity_uart_queue_t *queue)
+static bool ble_proximity_chk_queue_empty(ble_proximity_uart_queue_t *queue)
 {
   return (queue->size == 0);
 }
 
-bool ble_proximity_chk_queue_full(ble_proximity_uart_queue_t *queue)
+static bool ble_proximity_chk_queue_full(ble_proximity_uart_queue_t *queue)
 {
   return (queue->size == BLE_PROXIMITY_UART_QUEUE_SIZE);
 }
 
-bool ble_proximity_add_in_queue(ble_proximity_uart_queue_t *queue,
-                                ble_proximity_uart_pack_t pack)
+static bool ble_proximity_add_in_queue(ble_proximity_uart_queue_t *queue,
+                                       ble_proximity_uart_pack_t pack)
 {
   if (ble_proximity_chk_queue_full(queue)) {
     return false;  // Очередь полна, не можем добавить элемент
@@ -419,8 +547,8 @@ bool ble_proximity_add_in_queue(ble_proximity_uart_queue_t *queue,
   }
 }
 
-bool ble_proximity_del_from_queue(ble_proximity_uart_queue_t *queue,
-                                  ble_proximity_uart_pack_t *pack)
+static bool ble_proximity_del_from_queue(ble_proximity_uart_queue_t *queue,
+                                         ble_proximity_uart_pack_t *pack)
 {
   if (ble_proximity_chk_queue_empty(queue)) {
     return false;  // Очередь пуста, нет элементов для удаления
@@ -432,7 +560,7 @@ bool ble_proximity_del_from_queue(ble_proximity_uart_queue_t *queue,
   }
 }
 
-void ble_proximity_chk_queue(ble_proximity_uart_queue_t *queue)
+static void ble_proximity_chk_queue(ble_proximity_uart_queue_t *queue)
 {
   if (ble_proximity_chk_queue_empty(queue)) {
     return;  // Очередь пуста, нечего обходить
@@ -457,8 +585,8 @@ void ble_proximity_chk_queue(ble_proximity_uart_queue_t *queue)
   queue->size = newSize;
 }
 
-uint8_t ble_proximity_calc_crc(uint8_t *data,
-                               uint8_t data_len)
+static uint8_t ble_proximity_calc_crc(uint8_t *data,
+                                      uint8_t data_len)
 {
   uint8_t crc = 0x00;
   for(uint8_t i = 0; i < data_len; i++) {

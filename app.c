@@ -246,6 +246,7 @@ void handle_device_states(void)
 SL_WEAK void app_init(void)
 {
   ble_proximity_init(&ble_proximity_handle,
+                     TIMER_PERIODIC_PERIOD,
                      true,
                      true,
                      true);
