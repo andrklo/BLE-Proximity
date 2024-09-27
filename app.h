@@ -52,9 +52,11 @@ void uart_dma_send(void);
 void uart_dma_receive(void);
 
 void timer_periodic_init(void);
-void timer_periodic_callback(app_timer_t *timer, void *data);
+void timer_periodic_callback(app_timer_t *timer,
+                             void *data);
 void timer_trigger_pulse_init(void);
-void timer_trigger_pulse_callback(app_timer_t *timer, void *data);
+void timer_trigger_pulse_callback(app_timer_t *timer,
+                                  void *data);
 
 void handle_device_states(void);
 

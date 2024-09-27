@@ -41,6 +41,7 @@
 // The advertising set handle allocated from Bluetooth stack.
 static uint8_t advertising_set_handle = 0xff;
 
+// BLE proximity
 static ble_proximity_handle_t ble_proximity_handle;
 
 // Uart
@@ -53,7 +54,8 @@ static app_timer_t periodic_timer;
 static volatile bool periodic_timer_flag = false;
 
 // Инициализация GPIO ()
-void gpio_init(void) {
+void gpio_init(void)
+{
   // Настройка Trigger пина как output
   GPIO_PinModeSet(USS_TRIGGER_PORT,
                   USS_TRIGGER_PIN,
@@ -91,14 +93,14 @@ void gpio_init(void) {
 }
 
 // Обработчик прерываний GPIO
-void gpio_callback(uint8_t pin) {
-  if (ble_proximity_get_state() > BLE_PROXIMITY_MODULE_STATUS_NOT_INIT) {
+void gpio_callback(uint8_t pin)
+{
+  if (ble_proximity_get_state() > BLE_PROXIMITY_MODULE_STATE_NOT_INIT) {
     if (pin == USS_ECHO_PIN) {
       if (!ble_proximity_get_uss_echo_flag()) {
         // Начало сигнала Echo
         ble_proximity_set_uss_start_time(sl_sleeptimer_get_tick_count());
-      }
-      else {
+      } else {
         // Конец сигнала Echo
         ble_proximity_set_uss_end_time(sl_sleeptimer_get_tick_count());
       }
@@ -111,7 +113,8 @@ void gpio_callback(uint8_t pin) {
   }
 }
 
-void uart_init_dma(void) {
+void uart_init_dma(void)
+{
   // Инициализация DMADRV
   DMADRV_Init();
 
@@ -122,7 +125,8 @@ void uart_init_dma(void) {
                          NULL);
 }
 
-void uart_dma_send(void) {
+void uart_dma_send(void)
+{
   // Передача данных через DMA
   DMADRV_MemoryPeripheral(uart_dma_channel_tx,
                           dmadrvPeripheralSignal_USART0_TXBL,
@@ -135,7 +139,8 @@ void uart_dma_send(void) {
                           NULL); // Коллбек (необязательно)
 }
 
-void uart_dma_receive(void) {
+void uart_dma_receive(void)
+{
   // Ожидание приема данных через DMA с callback-функцией
   DMADRV_PeripheralMemory(uart_dma_channel_rx,
                           dmadrvPeripheralSignal_USART0_RXDATAV,
@@ -148,7 +153,8 @@ void uart_dma_receive(void) {
                           NULL);
 }
 
-void timer_periodic_init(void) {
+void timer_periodic_init(void)
+{
   // Запускаем периодический таймер 1000 миллисекунд
   app_timer_start(&periodic_timer,
                   TIMER_PERIODIC_PERIOD,
@@ -157,14 +163,17 @@ void timer_periodic_init(void) {
                   true);
 }
 
-void timer_periodic_callback(app_timer_t *timer, void *data) {
+void timer_periodic_callback(app_timer_t *timer,
+                             void *data)
+{
   (void) data;
   (void) timer;
   periodic_timer_flag = true;
 }
 
 // Запуск триггерного импульса с использованием app_timer
-void timer_trigger_pulse_init(void) {
+void timer_trigger_pulse_init(void)
+{
   GPIO_PinOutSet(USS_TRIGGER_PORT,
                  USS_TRIGGER_PIN);
 
@@ -177,14 +186,17 @@ void timer_trigger_pulse_init(void) {
 }
 
 // Функция завершения триггерного импульса
-void timer_trigger_pulse_callback(app_timer_t *timer, void *data) {
+void timer_trigger_pulse_callback(app_timer_t *timer,
+                                  void *data)
+{
   (void) data;
   (void) timer;
   GPIO_PinOutClear(USS_TRIGGER_PORT,
                    USS_TRIGGER_PIN);
 }
 
-void handle_device_states(void) {
+void handle_device_states(void)
+{
   sl_status_t sc;
 
   if (ble_proximity_get_uss_start_req()) {
@@ -231,8 +243,12 @@ void handle_device_states(void) {
 /**************************************************************************//**
  * Application Init.
  *****************************************************************************/
-SL_WEAK void app_init(void) {
-  ble_proximity_init(&ble_proximity_handle);
+SL_WEAK void app_init(void)
+{
+  ble_proximity_init(&ble_proximity_handle,
+                     true,
+                     true,
+                     true);
   gpio_init();
   uart_init_dma();
   timer_periodic_init();
@@ -241,7 +257,8 @@ SL_WEAK void app_init(void) {
 /**************************************************************************//**
  * Application Process Action.
  *****************************************************************************/
-SL_WEAK void app_process_action(void) {
+SL_WEAK void app_process_action(void)
+{
   if (periodic_timer_flag) {
     periodic_timer_flag = false;
     ble_proximity_set_timer_tick();
@@ -257,7 +274,8 @@ SL_WEAK void app_process_action(void) {
  *
  * @param[in] evt Event coming from the Bluetooth stack.
  *****************************************************************************/
-void sl_bt_on_event(sl_bt_msg_t *evt) {
+void sl_bt_on_event(sl_bt_msg_t *evt)
+{
   sl_status_t sc;
 
   switch (SL_BT_MSG_ID(evt->header)) {
@@ -270,9 +288,8 @@ void sl_bt_on_event(sl_bt_msg_t *evt) {
       app_assert_status(sc);
 
       // Generate data for advertising
-      sc =
-          sl_bt_legacy_advertiser_generate_data(advertising_set_handle,
-                                                sl_bt_advertiser_general_discoverable);
+      sc = sl_bt_legacy_advertiser_generate_data(advertising_set_handle,
+                                                 sl_bt_advertiser_general_discoverable);
       app_assert_status(sc);
 
       // Set advertising interval to 100ms.
@@ -290,20 +307,19 @@ void sl_bt_on_event(sl_bt_msg_t *evt) {
       sc = ir_sensor_update_characteristic();
       sc = uss_distance_update_characteristic();
 
-      ble_proximity_set_state(BLE_PROXIMITY_MODULE_STATUS_ADVERT);
+      ble_proximity_set_state(BLE_PROXIMITY_MODULE_STATE_ADVERT);
 
       ble_proximity_send_state();
       break;
 
     case sl_bt_evt_connection_opened_id:
-      ble_proximity_set_state(BLE_PROXIMITY_MODULE_STATUS_CONNECTED);
+      ble_proximity_set_connected(true);
       break;
 
     case sl_bt_evt_connection_closed_id:
       // Generate data for advertising
-      sc =
-          sl_bt_legacy_advertiser_generate_data(advertising_set_handle,
-                                                sl_bt_advertiser_general_discoverable);
+      sc = sl_bt_legacy_advertiser_generate_data(advertising_set_handle,
+                                                 sl_bt_advertiser_general_discoverable);
       app_assert_status(sc);
 
       // Restart advertising after client has disconnected.
@@ -311,24 +327,20 @@ void sl_bt_on_event(sl_bt_msg_t *evt) {
                                          sl_bt_legacy_advertiser_connectable);
       app_assert_status(sc);
 
-      ble_proximity_set_state(BLE_PROXIMITY_MODULE_STATUS_ADVERT);
+      ble_proximity_set_connected(false);
       break;
 
       // This event occurs when the remote device enabled or disabled the
       // notification.
     case sl_bt_evt_gatt_server_characteristic_status_id:
-      if (gattdb_uss_distance
-          == evt->data.evt_gatt_server_characteristic_status.characteristic) {
-        if (evt->data.evt_gatt_server_characteristic_status.client_config_flags
-            & sl_bt_gatt_notification) {
+      if (gattdb_uss_distance == evt->data.evt_gatt_server_characteristic_status.characteristic) {
+        if (evt->data.evt_gatt_server_characteristic_status.client_config_flags & sl_bt_gatt_notification) {
 
           sc = uss_distance_send_notification();
         }
       }
-      if (gattdb_ir_sensor_state
-          == evt->data.evt_gatt_server_characteristic_status.characteristic) {
-        if (evt->data.evt_gatt_server_characteristic_status.client_config_flags
-            & sl_bt_gatt_notification) {
+      if (gattdb_ir_sensor_state == evt->data.evt_gatt_server_characteristic_status.characteristic) {
+        if (evt->data.evt_gatt_server_characteristic_status.client_config_flags & sl_bt_gatt_notification) {
 
           sc = ir_sensor_send_notification();
         }
@@ -340,7 +352,8 @@ void sl_bt_on_event(sl_bt_msg_t *evt) {
   }
 }
 
-sl_status_t ir_sensor_update_characteristic(void) {
+sl_status_t ir_sensor_update_characteristic(void)
+{
   sl_status_t sc;
   uint8_t data_send;
 
@@ -353,7 +366,8 @@ sl_status_t ir_sensor_update_characteristic(void) {
   return sc;
 }
 
-sl_status_t ir_sensor_send_notification(void) {
+sl_status_t ir_sensor_send_notification(void)
+{
   sl_status_t sc;
   uint8_t data_send;
   size_t data_len;
@@ -373,7 +387,8 @@ sl_status_t ir_sensor_send_notification(void) {
   return sc;
 }
 
-sl_status_t uss_distance_update_characteristic(void) {
+sl_status_t uss_distance_update_characteristic(void)
+{
   sl_status_t sc;
   float distance = ble_proximity_get_uss_distance();
   uint8_t data_send[2];
@@ -392,7 +407,8 @@ sl_status_t uss_distance_update_characteristic(void) {
   return sc;
 }
 
-sl_status_t uss_distance_send_notification(void) {
+sl_status_t uss_distance_send_notification(void)
+{
   sl_status_t sc;
   uint8_t data_send[2];
   size_t data_len;

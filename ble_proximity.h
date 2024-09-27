@@ -6,57 +6,61 @@
 #include <stdbool.h>
 #include <math.h>
 
-#define BLE_PROXIMITY_UART_PREAMBLE                0x45      // Преамбула
+#define BLE_PROXIMITY_UART_PREAMBLE                 0x45      // Преамбула
 
-#define BLE_PROXIMITY_UART_PACK_POS_PREAMBLE       0
-#define BLE_PROXIMITY_UART_PACK_POS_CMD            1
-#define BLE_PROXIMITY_UART_PACK_POS_DATA           2
-#define BLE_PROXIMITY_UART_PACK_POS_CRC            7
+#define BLE_PROXIMITY_UART_PACK_POS_PREAMBLE        0
+#define BLE_PROXIMITY_UART_PACK_POS_CMD             1
+#define BLE_PROXIMITY_UART_PACK_POS_DATA            2
+#define BLE_PROXIMITY_UART_PACK_POS_CRC             7
 
-#define BLE_PROXIMITY_UART_QUEUE_SIZE              5        // Размер очереди пакетов
-#define BLE_PROXIMITY_UART_PACK_SIZE               8        // Размер пакета
-#define BLE_PROXIMITY_UART_PACK_DATA_SIZE          5        // Количество байт данных
+#define BLE_PROXIMITY_UART_QUEUE_SIZE               5        // Размер очереди пакетов
+#define BLE_PROXIMITY_UART_PACK_SIZE                8        // Размер пакета
+#define BLE_PROXIMITY_UART_PACK_DATA_SIZE           5        // Количество байт данных
 
-#define BLE_PROXIMITY_UART_DEST_RX  false
-#define BLE_PROXIMITY_UART_DEST_TX  true
+#define BLE_PROXIMITY_UART_DEST_RX                  false
+#define BLE_PROXIMITY_UART_DEST_TX                  true
 
-typedef enum {
-  BLE_PROXIMITY_CMD_MODULE_STATUS = 0x01,
+typedef enum
+{
+  BLE_PROXIMITY_CMD_MODULE_STATE = 0x01,
   BLE_PROXIMITY_CMD_DISTANCE_DATA = 0x02,
   BLE_PROXIMITY_CMD_IR_DATA = 0x03
 } ble_proximity_cmd_t;
 
-typedef enum {
-  BLE_PROXIMITY_MODULE_STATUS_UNKNOWN = 0x00,  // Статус радиомодуля не известен
-  BLE_PROXIMITY_MODULE_STATUS_NOT_INIT = 0x01, // Радиомодуль не инициализирован
-  BLE_PROXIMITY_MODULE_STATUS_ADVERT = 0x02,      // Радиомодуль в режиме поиска
-  BLE_PROXIMITY_MODULE_STATUS_CONNECTED = 0x03,         // Радиомодуль подключен
-  BLE_PROXIMITY_MODULE_STATUS_LOST = 0xFF         // Ошибка в работе радиомодуля
-} ble_proximity_module_status_t;
+typedef enum
+{
+  BLE_PROXIMITY_MODULE_STATE_UNKNOWN = 0x00,     // Статус радиомодуля не известен
+  BLE_PROXIMITY_MODULE_STATE_NOT_INIT = 0x01,    // Радиомодуль не инициализирован
+  BLE_PROXIMITY_MODULE_STATE_ADVERT = 0x02,      // Радиомодуль в режиме поиска
+  BLE_PROXIMITY_MODULE_STATE_CONNECTED = 0x03,   // Радиомодуль подключен
+  BLE_PROXIMITY_MODULE_STATE_LOST = 0xFF         // Ошибка в работе радиомодуля
+} ble_proximity_module_state_t;
 
-typedef struct {
-  ble_proximity_module_status_t status;
-  uint8_t radio_id;
+typedef struct
+{
+  ble_proximity_module_state_t state;
   bool connected;
-  bool type_changed;
-  bool status_changed;
 } ble_proximity_module_struct_t;
 
-typedef struct {
+typedef struct
+{
   bool status;
   uint8_t cmd;
   uint8_t data[BLE_PROXIMITY_UART_PACK_DATA_SIZE];
   uint8_t crc;
 } ble_proximity_uart_pack_t;
 
-typedef struct {
+typedef struct
+{
   int front;
   int rear;
   int size;
   ble_proximity_uart_pack_t pack[BLE_PROXIMITY_UART_QUEUE_SIZE];
 } ble_proximity_uart_queue_t;
 
-typedef struct {
+typedef struct
+{
+  bool enable;
   ble_proximity_uart_queue_t rx_queue;
   ble_proximity_uart_queue_t tx_queue;
   uint8_t rx_current_pack;
@@ -69,21 +73,26 @@ typedef struct {
   bool tx_req;
 } ble_proximity_uart_handle_t;
 
-typedef struct {
+typedef struct
+{
+  bool enable;
+  bool flag;
   float distance;
   bool start_req;
-  bool sensor_flag;
   bool echo_flag;
   uint32_t start_time;
   uint32_t end_time;
 } ble_proximity_uss_handle_t;
 
-typedef struct {
-  bool sensor_state;
-  bool sensor_flag;
+typedef struct
+{
+  bool enable;
+  bool flag;
+  bool state;
 } ble_proximity_ir_handle_t;
 
-typedef struct {
+typedef struct
+{
   ble_proximity_module_struct_t module;
   ble_proximity_uart_handle_t uart;
   ble_proximity_uss_handle_t uss;
@@ -91,19 +100,28 @@ typedef struct {
   bool timer_tick;
 } ble_proximity_handle_t;
 
-void ble_proximity_init(ble_proximity_handle_t *handle);
+void ble_proximity_init(ble_proximity_handle_t *handle,
+                        bool uart_enable,
+                        bool uss_enable,
+                        bool ir_enable);
 void ble_proximity_handler(void);
 
 void ble_proximity_set_timer_tick(void);
 
-void ble_proximity_set_state(ble_proximity_module_status_t state);
-ble_proximity_module_status_t ble_proximity_get_state(void);
+void ble_proximity_set_state(ble_proximity_module_state_t state);
+ble_proximity_module_state_t ble_proximity_get_state(void);
+void ble_proximity_set_connected(bool state);
+bool ble_proximity_get_connected(void);
 
+bool ble_proximity_get_ir_enable(void);
+void ble_proximity_set_ir_enable(bool enable);
 bool ble_proximity_get_ir_flag(void);
 void ble_proximity_set_ir_flag(bool flag);
 bool ble_proximity_get_ir_state(void);
 void ble_proximity_set_ir_state(bool state);
 
+bool ble_proximity_get_uss_enable(void);
+void ble_proximity_set_uss_enable(bool enable);
 bool ble_proximity_get_uss_start_req(void);
 void ble_proximity_set_uss_start_req(bool flag);
 bool ble_proximity_get_uss_flag(void);
@@ -116,9 +134,13 @@ float ble_proximity_get_uss_distance(void);
 
 void ble_proximity_uss_distance_calc(void);
 
-void ble_proximity_uart_set_state(bool dest, bool state);
+bool ble_proximity_get_uart_enable(void);
+void ble_proximity_set_uart_enable(bool enable);
+void ble_proximity_uart_set_state(bool dest,
+                                  bool state);
 bool ble_proximity_uart_get_state(bool dest);
-void ble_proximity_uart_set_req(bool dest, bool state);
+void ble_proximity_uart_set_req(bool dest,
+                                bool state);
 bool ble_proximity_uart_get_req(bool dest);
 
 void ble_proximity_send_state(void);
@@ -148,6 +170,7 @@ void ble_proximity_chk_queue(ble_proximity_uart_queue_t *queue);
 void ble_proximity_rx_queue_handler(void);
 void ble_proximity_tx_queue_handler(void);
 
-uint8_t ble_proximity_calc_crc(uint8_t *data, uint8_t data_len);
+uint8_t ble_proximity_calc_crc(uint8_t *data,
+                               uint8_t data_len);
 
 #endif /* BLE_PROXIMITY_H_ */
